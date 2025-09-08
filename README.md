@@ -49,7 +49,104 @@ Politeness to the free API:
 ---
 
 ## Traceability
+
 See the Traceability.md document to see the Functional Requirement Decomposition and tracability into Deisgn Parameters and testing.  
+
+---
+
+## Design Choices and Tradeoffs 
+
+
+### 1) Public API & “overhead” definition
+- **Choice:** Use `sat.terrestre.ar` per-satellite **passes** endpoint.  
+  **Why:** Free, no key, simple JSON with `rise/culmination/set`.  
+  **Tradeoff:** No “what’s overhead now?” discovery; you must pre-select NORAD IDs. Occasional 429/500s.  
+  **Alternatives (later):** Use N2YO `/above` for discovery; or compute locally (Skyfield + TLEs) for zero external calls.
+
+- **Choice:** “Overhead now” = `rise.utc_timestamp ≤ now ≤ set.utc_timestamp` **and** `culmination.alt ≥ min_elevation_deg`.  
+  **Why:** Fast, easy to reason about; one call gives the pass window + peak elevation.  
+  **Tradeoff:** Uses **peak** elevation to gate the whole pass, not instantaneous elevation at `now`. Slightly permissive near edges.  
+  **Alternatives (later):** Use an API or local propagation to compute **instantaneous** elevation each tick.
+
+
+### 2) Cadence & timing
+- **Choice:** Drift-free **10 s** cadence using `time.monotonic()`; subtract work time each tick.  
+  **Why:** Predictable loop that satisfies CN-1.3 precisely; immune to wall-clock jumps.  
+  **Tradeoff:** If a tick is slow, the next tick may start immediately (sleep 0).  
+  **Alternatives (later):** Cron/scheduler (less precise); async scheduling or job queues (more complexity).
+
+- **Choice:** Fetch **one satellite per tick** (round-robin) with an **in-memory cache** of pass windows.  
+  **Why:** Polite to the free API; smooths request rate; still converges across ticks.  
+  **Tradeoff:** With many IDs, freshness updates spread across multiple ticks.  
+  **Alternatives (later):** Raise per-tick budget; batch endpoints (if available); or local predictions.
+
+
+### 3) Rate limits & resilience
+- **Choice:** **Timeout (~5 s), one retry, exponential backoff** with jitter; treat failures as “not visible this tick.”  
+  **Why:** Loop stays healthy; one bad call doesn’t block others (DP-1.2.2).  
+  **Tradeoff:** During API issues you may miss a legitimate pass.  
+  **Alternatives (later):** Multi-provider fallback; longer/persistent cache; circuit breaker.
+
+
+### 4) Configuration & validation
+- **Choice:** **YAML** config + **Pydantic** validation.  
+  **Why:** Human-friendly file; strong schema errors early; normalized object for the app.  
+  **Tradeoff:** Extra dependency; must keep schema/docs in sync.  
+  **Alternatives (later):** JSON/TOML; env-only; hot-reload.
+
+- **Choice:** `min_elevation_deg` default **10.0°** with `0 ≤ min ≤ 90`.  
+  **Why:** Sensible horizon threshold; safe bounds.  
+  **Tradeoff:** Labs may prefer a different default (overridable in config).
+
+
+### 5) Output & logging (constraints-driven)
+- **Choice:** Outputs limited to **STDOUT**, **file**, or **TCP**; validation rejects others (**C-6**).  
+  **Why:** Exactly matches constraint and keeps interface simple.  
+  **Tradeoff:** No MQTT/HTTP/webhooks.  
+  **Alternatives (later, only if constraints change):** Pluggable sink system.
+
+- **Choice:** **Logs only to STDERR** (**C-5**); STDOUT reserved **only** for the command line when sats are overhead.  
+  **Why:** Clean separation of data vs diagnostics; predictable piping.  
+  **Tradeoff:** No structured JSON logs to STDOUT.  
+  **Alternatives (later):** Structured logs to STDERR; optional exporters (if constraints allow).
+
+- **Choice:** **One line at most per tick**; stable format `"id: color, id: color"` sorted by ID.  
+  **Why:** Deterministic, easy to parse and diff; downstream-friendly.  
+  **Tradeoff:** No custom formatting per sink.  
+  **Alternatives (later):** Configurable formatter (if needs emerge).
+
+
+### 6) Simplicity of runtime model
+- **Choice:** **Synchronous** Python; no threads/async.  
+  **Why:** Minimal complexity; straightforward tests; reliable timing.  
+  **Tradeoff:** Not maximally parallel; per-tick IO budget is limited.  
+  **Alternatives (later):** `async` + `httpx`, threadpool for IO, or worker processes.
+
+
+### 7) Packaging & operations
+- **Choice:** **Docker** (`python:3.13-slim`), non-root user, `docker-compose` mounts `/app/config.yaml`.  
+  **Why:** Reproducible, portable, one-command runs (CN-2/C-4).  
+  **Tradeoff:** Image size/overhead vs pure host install.  
+  **Alternatives (later):** Multi-stage builds to slim further; publish to a registry.
+
+- **Choice:** **Makefile** targets for run/lint/test/docker/compose.  
+  **Why:** Short, memorable commands; avoids long flags.  
+  **Tradeoff:** Another layer of tooling (standard on dev machines).
+
+
+### 8) Testing & quality
+- **Choice:** **pytest** with HTTP mocking + time monkeypatch; **mypy**; **ruff**.  
+  **Why:** Fast feedback; enforces C-2/C-3; keeps code consistent.  
+  **Tradeoff:** Some boilerplate in tests and configs.  
+  **Alternatives (later):** Coverage gates; property-based tests; mutation testing.
+
+
+### 9) Scope boundaries (intentional “non-features”)
+- **Not included (on purpose):** Instantaneous elevation, sunlit/visibility optics, TLE lifecycle, discovery of nearby IDs, fancy sinks, metrics/telemetry, persistent cache.  
+  **Why:** Keep MVP minimal, testable, and constraint-true; ship a robust core first.  
+  **Future options:** Each is a clear extension seam without rewriting the core.
+
+
 
 
 ---
