@@ -66,11 +66,14 @@ out:
 # --- Docker log and output helpers -----------
 
 # Shows the logs (STDERR error messages) of the current running container. -f follows the logs in realtime 
-errlogs-realtime:
+logs:
+	docker compose logs
+
+logs-realtime:
 	docker compose logs -f 
 
 # Shows the last 100 lines of the logs (STDERR error messages) of the current running container.
-errlogs-tail:
+logs-tail:
 	docker compose logs --tail 100
 
 # Shows the logs (STDOUT output messages) of the current running container.
@@ -93,6 +96,7 @@ stdout-logs:
 	else \
 		echo "No running container found. Run 'make up' first."; \
 	fi
+
 
 # Reads the output file from config.yaml.
 read-outputfile:

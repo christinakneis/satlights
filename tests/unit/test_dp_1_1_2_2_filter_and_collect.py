@@ -29,6 +29,10 @@ def _cfg(min_elev: float = 10.0) -> AppConfig:
 
 # This test checks if the visible_now function includes satellites inside the window and with a peak greater than or equal to the minimum elevation.
 def test_FR_1_1_2_2__includes_inside_window_and_peak_ge_min(monkeypatch):
+    from src.satlight.visibility import clear_cache_for_tests
+
+    clear_cache_for_tests()  # Clear cache before test
+
     # now between rise and set
     now = 1500
     monkeypatch.setattr("time.time", lambda: float(now))
@@ -52,6 +56,10 @@ def test_FR_1_1_2_2__includes_inside_window_and_peak_ge_min(monkeypatch):
 
 # This test checks if the visible_now function excludes satellites if the peak is below the minimum elevation even when inside the window.
 def test_FR_1_1_2_2__excludes_if_peak_below_min_even_when_inside_window(monkeypatch):
+    from src.satlight.visibility import clear_cache_for_tests
+
+    clear_cache_for_tests()  # Clear cache before test
+
     now = 1500
     monkeypatch.setattr("time.time", lambda: float(now))
 
@@ -71,6 +79,10 @@ def test_FR_1_1_2_2__excludes_if_peak_below_min_even_when_inside_window(monkeypa
 
 # This test checks if the visible_now function includes satellites exactly at the rise and set edges.
 def test_FR_1_1_2_2__includes_exactly_at_rise_and_set_edges():
+    from src.satlight.visibility import clear_cache_for_tests
+
+    clear_cache_for_tests()  # Clear cache before test
+
     cfg = _cfg(min_elev=10.0)
     # One pass object used for both sub-cases; peak meets threshold
     pass_obj = {
