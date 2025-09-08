@@ -1,22 +1,22 @@
-# SatLight — one line every 10 seconds when satellites are overhead
+# 🛰️🚨 SatLight — one line every 10 seconds when satellites are overhead
 
 A small CLI service that watches for specific satellites passing above your lab and emits **one command line** in the form of `NORAD_ID_0: color_0, NORAD_ID_1: color_1, .., NORAD_ID_N: color_N` every 10 s while any of them are "overhead".
 
-## Outputs
+## 📤 Outputs
 - Example output line:  
   `25544: blue, 43013: teal`
 - Output sinks (choose any/all): **STDOUT**, **file**, or **TCP**.
 - All diagnostics/logs go to **STDERR** (never STDOUT).
 
-## Inputs 
+## 📥 Inputs 
 The only input to SatLight is a YAML configuration file (`config.yaml`) placed in the project root. See the configuration section below for more details 
 
-## Design Method
+## 👩‍🎨 Design Method
 This project follows the **IDT** decomposition of Customer Needs (CN) and Constraints (C) mapped to Functional Requirements (FR) > Design Parameters (DP). 
 
 ---
 
-## How it works (quick)
+## ⚙️ How it works (quick)
 
 1. **Config** (`config.yaml`) defines your lab location, the satellites to track (`NORAD_ID → color`), outputs, and an optional `min_elevation_deg`.
 2. **API**: for each configured satellite, the service queries the public **sat.terrestre.ar** "passes" endpoint to get the **next pass window** (rise/culmination/set).
@@ -37,7 +37,7 @@ Politeness to the free API:
 
 ---
 
-## Constraints satisfied
+## 🚧 Constraints satisfied
 
 - **C-1** Python ≥ 3.12 → uses **Python 3.13**
 - **C-2** Type annotations → typed code + `mypy`
@@ -48,13 +48,13 @@ Politeness to the free API:
 
 ---
 
-## Traceability
+## 🫆 Traceability
 
 See the Traceability.md document to see the Functional Requirement Decomposition and tracability into Deisgn Parameters and testing.  
 
 ---
 
-## Design Choices and Tradeoffs 
+## ⚖️ Design Choices and Tradeoffs 
 
 
 ### 1) Public API & “overhead” definition
@@ -151,7 +151,7 @@ See the Traceability.md document to see the Functional Requirement Decomposition
 
 ---
 
-## Configuration
+## 📝 Configuration
 
 Create `config.yaml` in the repo root (there's a `config.example.yaml` you can copy):
 
@@ -169,7 +169,7 @@ outputs:
   # - tcp:127.0.0.1:9000       # optional TCP sink
 ```
 
-### Config schema
+### 🗂️ Config schema
 
 - `lat`, `lon`: Your lab's coordinates (required)
 - `satellites`: Map of `NORAD_ID → color` (required, non-empty)
@@ -181,7 +181,7 @@ outputs:
 
 ---
 
-## Prerequisites
+## 🌱 Prerequisites
 
 - **Python 3.13+** (for local development)
 - **Docker** (for containerized deployment)
@@ -189,7 +189,7 @@ outputs:
 
 ---
 
-## Quick start
+## 🚀 Quick start
 
 ### Option 1: Docker (recommended)
 
@@ -229,7 +229,7 @@ make testrun ARGS="--config config.yaml --once"
 
 ---
 
-## Makefile commands
+## ▶️ Makefile commands
 
 ### Development
 - `make help` → show all available commands
@@ -258,7 +258,7 @@ make testrun ARGS="--config config.yaml --once"
 
 ---
 
-## Sample outputs
+## 📦 Sample outputs
 
 ### STDOUT (satellite commands)
 ```
@@ -276,7 +276,7 @@ make testrun ARGS="--config config.yaml --once"
 
 ---
 
-## Troubleshooting
+## 🤔 Troubleshooting
 
 ### No satellites showing up?
 - Check your `lat`/`lon` coordinates
@@ -301,7 +301,7 @@ make testrun ARGS="--config config.yaml --once"
 
 ---
 
-## Architecture
+## 🏛️ Architecture
 
 The service follows a clean separation of concerns:
 
@@ -316,7 +316,7 @@ The service follows a clean separation of concerns:
 
 ---
 
-## Testing
+## 🧪 Testing
 
 The test suite covers all major functionality:
 
@@ -333,6 +333,6 @@ Key test areas:
 
 ---
 
-## License
+## 🪪 License
 
 This project is part of a technical challenge/assessment.
