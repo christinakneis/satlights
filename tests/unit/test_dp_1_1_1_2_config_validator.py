@@ -26,7 +26,7 @@ def test_FR_1_1_1_2__validates_lat_lon_bounds_and_defaults_min_elev_10():
     assert cfg.min_elevation_deg == 10.0  # default applied
     # satellites keys should be normalized to int
     assert set(cfg.satellites.keys()) == {25544, 48915}
-    print("✅test_FR_1_1_1_2__validates_lat_lon_bounds_and_defaults_min_elev_10 passed")
+    print("\n.✅test_FR_1_1_1_2__validates_lat_lon_bounds_and_defaults_min_elev_10 passed")
 
 
 # This test checks if the validate_config function rejects disallowed output sinks.
