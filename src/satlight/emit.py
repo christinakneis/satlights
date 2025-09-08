@@ -55,15 +55,26 @@ def run_forever(
         pairs = visible_now(
             cfg, now_fn=now_fn, mono_fn=monotonic_fn, max_fetches_per_tick=1
         )  # Get the satellite and color pairs from the visible_now function.
+        emitted = False
+        line = ""
         if pairs:
             line = format_line(
                 pairs
             )  # Format the pairs into a line using the format_line function.
             if line:  # If the line is not empty, emit the line to the outputs.
                 _emit_to_outputs(cfg.outputs, line)
+                emitted = True
 
         elapsed = monotonic_fn() - t0  # Get the elapsed time.
         delay = _PERIOD_SEC - elapsed  # Get the delay.
+        # Heartbeat to STDERR (INFO): one line per tick
+        _LOG.info(
+            "tick: sats=%d, emitted=%s, work=%.3fs, sleep=%.3fs",
+            len(pairs),
+            emitted,
+            elapsed,
+            delay if delay > 0 else 0.0,
+        )
         if delay > 0:  # If the delay is greater than 0, sleep for the delay.
             sleep_fn(delay)
         # If delay <= 0, skip sleep and immediately start next cycle
@@ -85,12 +96,23 @@ def run_once(
     t0 = monotonic_fn()
 
     pairs = visible_now(cfg, now_fn=now_fn, mono_fn=monotonic_fn, max_fetches_per_tick=1)
+    emitted = False
+    line = ""
     if pairs:
         line = format_line(pairs)
         if line:
             _emit_to_outputs(cfg.outputs, line)
+            emitted = True
 
     elapsed = monotonic_fn() - t0
     delay = _PERIOD_SEC - elapsed
+    # Heartbeat to STDERR (INFO): one line for this single tick
+    _LOG.info(
+        "tick: sats=%d, emitted=%s, work=%.3fs, sleep=%.3fs",
+        len(pairs),
+        emitted,
+        elapsed,
+        delay if delay > 0 else 0.0,
+    )
     if do_sleep and delay > 0:
         sleep_fn(delay)
