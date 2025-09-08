@@ -16,7 +16,8 @@ Maps to:
   C-6 (allowed sinks enforced here)
 """
 
-#This function loads and parses YAML into a raw dictionary using yaml.safe_load.
+
+# This function loads and parses YAML into a raw dictionary using yaml.safe_load.
 def load_yaml(path: str) -> Dict[str, Any]:
     """
     DP-1.1.1.1: Load and parse YAML into raw dict using yaml.safe_load.
@@ -48,6 +49,7 @@ def load_yaml(path: str) -> Dict[str, Any]:
 # Allowed outputs (C-6): exactly 'stdout', 'file:<path>', or 'tcp:<host>:<port>'
 _TCP_RE = re.compile(r"^tcp:([^:]+):(\d{1,5})$")  # simple host:port (no IPv6 colons)
 
+
 # Pydantic config model for DP-1.1.1.2
 class AppConfig(BaseModel):
     lat: float
@@ -58,7 +60,7 @@ class AppConfig(BaseModel):
 
     # --- Validators ---
 
-    #This validator checks if the latitude is between -90 and 90 degrees.
+    # This validator checks if the latitude is between -90 and 90 degrees.
     @field_validator("lat")
     @classmethod
     def _lat_in_range(cls, v: float) -> float:
@@ -66,7 +68,7 @@ class AppConfig(BaseModel):
             raise ValueError("lat must be between -90 and 90 degrees")
         return float(v)
 
-    #This validator checks if the longitude is between -180 and 180 degrees.
+    # This validator checks if the longitude is between -180 and 180 degrees.
     @field_validator("lon")
     @classmethod
     def _lon_in_range(cls, v: float) -> float:
@@ -74,16 +76,16 @@ class AppConfig(BaseModel):
             raise ValueError("lon must be between -180 and 180 degrees")
         return float(v)
 
-    #This validator checks if the minimum elevation is between 0 and 90 degrees.
+    # This validator checks if the minimum elevation is between 0 and 90 degrees.
     @field_validator("min_elevation_deg")
     @classmethod
     def _min_elev_in_range(cls, v: float) -> float:
-        v = float(v) 
+        v = float(v)
         if not (0.0 <= v <= 90.0):
             raise ValueError("min_elevation_deg must be between 0 and 90 inclusive")
         return v
 
-    #This validator checks if the satellites keys are positive integers and if the color is a non-empty string.
+    # This validator checks if the satellites keys are positive integers and if the color is a non-empty string.
     @field_validator("satellites")
     @classmethod
     def _satellites_non_empty_and_int_keys(cls, m: dict[Any, Any]) -> dict[int, str]:
@@ -102,7 +104,7 @@ class AppConfig(BaseModel):
             normalized[k] = color.strip()
         return normalized
 
-    #This validator checks if the outputs are exactly 'stdout', 'file:<path>', or 'tcp:<host>:<port>'.
+    # This validator checks if the outputs are exactly 'stdout', 'file:<path>', or 'tcp:<host>:<port>'.
     @field_validator("outputs")
     @classmethod
     def _outputs_allowed_only(cls, items: list[str]) -> list[str]:
@@ -135,7 +137,8 @@ class AppConfig(BaseModel):
             )
         return out
 
-#This function validates and normalizes a raw dictionary into an AppConfig object using Pydantic's model_validate.
+
+# This function validates and normalizes a raw dictionary into an AppConfig object using Pydantic's model_validate.
 def validate_config(raw: dict[str, Any]) -> AppConfig:
     """Validate and normalize raw dict into AppConfig (DP-1.1.1.2)."""
     return AppConfig.model_validate(raw)

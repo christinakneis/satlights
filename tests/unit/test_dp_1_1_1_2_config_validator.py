@@ -3,7 +3,8 @@ from pydantic import ValidationError
 
 from src.satlight.config import validate_config
 
-#This function creates a valid raw dictionary for testing.
+
+# This function creates a valid raw dictionary for testing.
 def _valid_raw(overrides=None):
     base = {
         "lat": 37.8,
@@ -16,7 +17,8 @@ def _valid_raw(overrides=None):
         base.update(overrides)
     return base
 
-#This test checks if the validate_config function validates the latitude, longitude, and minimum elevation.
+
+# This test checks if the validate_config function validates the latitude, longitude, and minimum elevation.
 def test_FR_1_1_1_2__validates_lat_lon_bounds_and_defaults_min_elev_10():
     cfg = validate_config(_valid_raw())
     assert cfg.lat == 37.8
@@ -26,14 +28,16 @@ def test_FR_1_1_1_2__validates_lat_lon_bounds_and_defaults_min_elev_10():
     assert set(cfg.satellites.keys()) == {25544, 48915}
     print("test_FR_1_1_1_2__validates_lat_lon_bounds_and_defaults_min_elev_10 passed")
 
-#This test checks if the validate_config function rejects disallowed output sinks.
+
+# This test checks if the validate_config function rejects disallowed output sinks.
 def test_FR_1_1_1_2__rejects_disallowed_output_sinks():
     bad = _valid_raw({"outputs": ["stdout", "udp:1.2.3.4:9999"]})
     with pytest.raises(ValidationError):
         _ = validate_config(bad)
     print("test_FR_1_1_1_2__rejects_disallowed_output_sinks passed")
 
-#This test checks if the validate_config function rejects out of range latitude and longitude.
+
+# This test checks if the validate_config function rejects out of range latitude and longitude.
 def test_FR_1_1_1_2__rejects_out_of_range_lat_lon():
     with pytest.raises(ValidationError):
         _ = validate_config(_valid_raw({"lat": 123.0}))
@@ -41,7 +45,8 @@ def test_FR_1_1_1_2__rejects_out_of_range_lat_lon():
         _ = validate_config(_valid_raw({"lon": -222.0}))
     print("test_FR_1_1_1_2__rejects_out_of_range_lat_lon passed")
 
-#This test checks if the validate_config function rejects empty satellites and bad keys.
+
+# This test checks if the validate_config function rejects empty satellites and bad keys.
 def test_FR_1_1_1_2__rejects_empty_satellites_and_bad_keys():
     with pytest.raises(ValidationError):
         _ = validate_config(_valid_raw({"satellites": {}}))

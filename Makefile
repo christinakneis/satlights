@@ -14,4 +14,4 @@ lint:
 	python3 -m mypy src
 
 test:
-	python3 -m pytest
+	python3 -m pytest $(ARGS) 		# can type make test ARGS="-s -v" for more verbose output
