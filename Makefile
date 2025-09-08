@@ -3,9 +3,9 @@
 help:
 	@echo "Targets: run, fmt, lint, test"
 
-# Run the CLI, assuming config.yaml is in the current directory.
+# Run the CLI assuming config.yaml is in the current directory (uses CLI default /app/config.yaml for containers)
 run: 
-	PYTHONPATH=src python3 -m satlight.cli --config config.yaml
+	PYTHONPATH=src python3 -m satlight.cli
 
 testrun: 
 	PYTHONPATH=src python3 -m satlight.cli $(ARGS)      # can do > make testrun ARGS="--config config.example.yaml --once"

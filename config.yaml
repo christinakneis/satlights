@@ -1,0 +1,7 @@
+lat: 37.8
+lon: -122.4
+min_elevation_deg: 20.0
+satellites:
+  25544: blue
+outputs:
+  - stdout
