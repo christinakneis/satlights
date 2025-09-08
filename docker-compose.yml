@@ -1,0 +1,10 @@
+services:
+  satlight:
+    build: .                   # builds the image from the Dockerfile in the current directory
+    image: satlight:dev        # tags the built image from the Dockerfile with dev tag
+    restart: unless-stopped
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./out:/out
+    # To run a single tick in compose, uncomment:
+    # command: ["--once"]
