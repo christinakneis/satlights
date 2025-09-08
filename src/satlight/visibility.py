@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
+from dataclasses import dataclass
 
 from .config import AppConfig
 from .api import fetch_next_pass
@@ -19,6 +20,22 @@ Maps to:
 # This function gets the logger for the visibility decision.
 _LOG = get_logger(__name__)
 
+#
+# Simple in-memory cache: one entry per satellite.
+# We cache the latest pass object until its "set" time. If fetch fails,
+# we set a retry_after time to avoid hammering the API (helps with 429s).
+#
+@dataclass
+class _CacheEntry:
+    pass_obj: Dict[str, Any]            # raw pass object
+    set_ts: int                         # cached pass 'set' timestamp
+    retry_after: float = 0.0            # monotonic time; don't refetch before this
+
+_CACHE: Dict[int, _CacheEntry] = {}
+
+def clear_cache_for_tests() -> None:  # exported for unit tests
+    _CACHE.clear()
+
 
 # This function parses the altitude from the pass object.
 def _parse_alt(value: Any) -> Optional[float]:
@@ -30,6 +47,14 @@ def _parse_alt(value: Any) -> Optional[float]:
     except (TypeError, ValueError):
         return None
     return None
+
+
+def _extract_set_ts(pass_obj: Dict[str, Any]) -> Optional[int]:
+    try:
+        set_ts = int(pass_obj["set"]["utc_timestamp"])
+        return set_ts
+    except Exception:
+        return None
 
 
 # This function checks if the satellite is overhead now by checking if the rise time is less than or equal to the current time and the set time is greater than or equal to the current time and the culmination altitude is greater than or equal to the minimum elevation.
@@ -57,12 +82,56 @@ def _is_overhead_now(pass_obj: Dict[str, Any], now_utc: int, min_elev: float) ->
         return False
 
 
+def _get_pass_with_cache(
+    sat_id: int,
+    cfg: AppConfig,
+    now_utc: int,
+    *,
+    fetcher: Callable[[int, float, float], Optional[Dict[str, Any]]],
+    mono: Callable[[], float],
+) -> Optional[Dict[str, Any]]:
+    """
+    Return a pass_obj using cache when possible; otherwise fetch and cache.
+    - Reuse cached pass until its set time.
+    - After a failed fetch, back off for ~60 s before trying again.
+    """
+    entry = _CACHE.get(sat_id)
+    if entry:
+        # If we have a valid pass and we're still before its set time, reuse it.
+        if now_utc <= entry.set_ts:
+            return entry.pass_obj
+        # If we're before retry_after (monotonic clock), skip calling the API now.
+        if mono() < entry.retry_after:
+            return None
+
+    # Either no cache, expired pass, or backoff elapsed: try to fetch
+    pass_obj = fetcher(sat_id, cfg.lat, cfg.lon)
+    if pass_obj is None:
+        # Set/refresh backoff (60 s) to avoid hammering (helps with 429).
+        backoff_until = mono() + 60.0
+        if entry:
+            entry.retry_after = backoff_until
+            _CACHE[sat_id] = entry
+        else:
+            _CACHE[sat_id] = _CacheEntry(pass_obj={}, set_ts=0, retry_after=backoff_until)
+        return None
+
+    set_ts = _extract_set_ts(pass_obj)
+    if set_ts is None:
+        # Bad pass shape; don't cache long-term
+        return pass_obj
+
+    _CACHE[sat_id] = _CacheEntry(pass_obj=pass_obj, set_ts=set_ts, retry_after=0.0)
+    return pass_obj
+
+
 # This function checks if the satellite is visible now.
 def visible_now(
     cfg: AppConfig,
     *,
     fetcher: Callable[[int, float, float], Optional[Dict[str, Any]]] = fetch_next_pass,
     now_fn: Callable[[], float] = time.time,
+    mono_fn: Callable[[], float] = time.monotonic,
 ) -> List[Tuple[int, str]]:
     """
     Return list of (sat_id, color) for satellites considered 'overhead now'
@@ -74,13 +143,10 @@ def visible_now(
     now_utc = int(now_fn())
     results: List[Tuple[int, str]] = []
 
-    for (
-        sat_id,
-        color,
-    ) in (
-        cfg.satellites.items()
-    ):  # Iterate over the satellites in the configuration and fetch the pass object.
-        pass_obj = fetcher(sat_id, cfg.lat, cfg.lon)
+    for sat_id, color in cfg.satellites.items():
+        pass_obj = _get_pass_with_cache(
+            sat_id, cfg, now_utc, fetcher=fetcher, mono=mono_fn
+        )
         if pass_obj is None:
             continue
         if _is_overhead_now(pass_obj, now_utc, cfg.min_elevation_deg):
