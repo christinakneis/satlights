@@ -19,6 +19,7 @@ Maps to:
 # This function gets the logger for the visibility decision.
 _LOG = get_logger(__name__)
 
+
 # This function parses the altitude from the pass object.
 def _parse_alt(value: Any) -> Optional[float]:
     try:
@@ -29,6 +30,7 @@ def _parse_alt(value: Any) -> Optional[float]:
     except (TypeError, ValueError):
         return None
     return None
+
 
 # This function checks if the satellite is overhead now by checking if the rise time is less than or equal to the current time and the set time is greater than or equal to the current time and the culmination altitude is greater than or equal to the minimum elevation.
 def _is_overhead_now(pass_obj: Dict[str, Any], now_utc: int, min_elev: float) -> bool:
@@ -54,6 +56,7 @@ def _is_overhead_now(pass_obj: Dict[str, Any], now_utc: int, min_elev: float) ->
         _LOG.error("malformed pass object: %r", pass_obj)
         return False
 
+
 # This function checks if the satellite is visible now.
 def visible_now(
     cfg: AppConfig,
@@ -71,7 +74,12 @@ def visible_now(
     now_utc = int(now_fn())
     results: List[Tuple[int, str]] = []
 
-    for sat_id, color in cfg.satellites.items(): # Iterate over the satellites in the configuration and fetch the pass object.
+    for (
+        sat_id,
+        color,
+    ) in (
+        cfg.satellites.items()
+    ):  # Iterate over the satellites in the configuration and fetch the pass object.
         pass_obj = fetcher(sat_id, cfg.lat, cfg.lon)
         if pass_obj is None:
             continue
