@@ -3,8 +3,13 @@
 help:
 	@echo "Targets: run, fmt, lint, test"
 
-run:
-	python3 -m src.satlight.cli
+# Run the CLI, assuming config.yaml is in the current directory.
+run: 
+	PYTHONPATH=src python3 -m satlight.cli --config config.yaml
+
+testrun: 
+	PYTHONPATH=src python3 -m satlight.cli $(ARGS)      # can do > make testrun ARGS="--config config.example.yaml --once"
+
 
 fmt:
 	python3 -m ruff format .
