@@ -1,13 +1,18 @@
 # SatLight — one line every 10 seconds when satellites are overhead
 
-A tiny CLI service that watches for specific satellites passing above your lab and emits **one command line** every ~10 s while any of them are "overhead".
+A small CLI service that watches for specific satellites passing above your lab and emits **one command line** in the form of `NORAD_ID_0: color_0, NORAD_ID_1: color_1, .., NORAD_ID_N: color_N` every 10 s while any of them are "overhead".
 
+## Outputs
 - Example output line:  
   `25544: blue, 43013: teal`
 - Output sinks (choose any/all): **STDOUT**, **file**, or **TCP**.
 - All diagnostics/logs go to **STDERR** (never STDOUT).
 
-This project follows the **IDT** decomposition you wrote (FRs/DPs) and enforces your **constraints**.
+## Inputs 
+The only input to SatLight is a YAML configuration file (`config.yaml`) placed in the project root. See the configuration section below for more details 
+
+## Design Method
+This project follows the **IDT** decomposition of Customer Needs (CN) and Constraints (C) mapped to Functional Requirements (FR) > Design Parameters (DP). 
 
 ---
 
@@ -40,6 +45,12 @@ Politeness to the free API:
 - **C-4** Docker used for containerization → `Dockerfile` + `docker-compose.yml`
 - **C-5** Logging only to **STDERR** → app logs (incl. a 10 s heartbeat) do not use STDOUT
 - **C-6** Outputs limited to STDOUT, file, or TCP → only these sinks are implemented
+
+---
+
+## Traceability
+See the Traceability.md document to see the Functional Requirement Decomposition and tracability into Deisgn Parameters and testing.  
+
 
 ---
 
@@ -93,7 +104,7 @@ cp config.example.yaml config.yaml
 make up
 
 # Watch the logs (STDERR diagnostics)
-make errlogs-realtime
+make logs-realtime
 
 # See satellite commands (STDOUT)
 make stdout-realtime
@@ -133,11 +144,13 @@ make testrun ARGS="--config config.yaml --once"
 
 ### Docker operations
 - `make docker-build` → build Docker image
+- `make docker-run` → run containerized service (forever, background)
+- `make docker-run-once` → run containerized service (single cycle)
 - `make up` → start containerized service
 - `make down` → stop service
 - `make logs` → show container logs (STDOUT + STDERR)
-- `make errlogs-realtime` → follow STDERR logs in real-time
-- `make errlogs-tail` → show last 100 STDERR log lines
+- `make logs-realtime` → follow container logs in real-time
+- `make logs-tail` → show last 100 container log lines
 - `make stdout-realtime` → follow STDOUT (satellite commands) in real-time
 - `make stdout-logs` → show last 100 STDOUT log lines
 
@@ -171,8 +184,8 @@ make testrun ARGS="--config config.yaml --once"
 ### No satellites showing up?
 - Check your `lat`/`lon` coordinates
 - Verify `min_elevation_deg` isn't too high
-- Look at STDERR logs for API errors
-- Try `make errlogs-tail` to see recent diagnostics
+- Look at container logs for API errors
+- Try `make logs-tail` to see recent diagnostics
 
 ### API rate limiting (HTTP 429)?
 - The service automatically handles this with exponential backoff
