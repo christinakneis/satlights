@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import random
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
@@ -28,9 +29,10 @@ _LOG = get_logger(__name__)
 #
 @dataclass
 class _CacheEntry:
-    pass_obj: Dict[str, Any]  # raw pass object
-    set_ts: int  # cached pass 'set' timestamp
+    pass_obj: Optional[Dict[str, Any]]  # raw pass object (None if none cached yet)
+    set_ts: int  # cached pass 'set' timestamp (0 if unknown)
     retry_after: float = 0.0  # monotonic time; don't refetch before this
+    fail_streak: int = 0  # consecutive failures for exponential backoff
 
 
 _CACHE: Dict[int, _CacheEntry] = {}
@@ -114,21 +116,32 @@ def _get_pass_with_cache(
     # Either no cache, expired pass, or backoff elapsed: try to fetch
     pass_obj = fetcher(sat_id, cfg.lat, cfg.lon)
     if pass_obj is None:
-        # Set/refresh backoff (60 s) to avoid hammering (helps with 429).
-        backoff_until = mono() + 60.0
-        if entry:
-            entry.retry_after = backoff_until
-            _CACHE[sat_id] = entry
-        else:
-            _CACHE[sat_id] = _CacheEntry(pass_obj={}, set_ts=0, retry_after=backoff_until)
+        # Exponential backoff with jitter: base 60s, cap at 3600s
+        base = 60.0
+        streak = (entry.fail_streak + 1) if entry else 1
+        delay = min(3600.0, base * (2 ** (streak - 1)))
+        jitter = delay * 0.1 * (2 * random.random() - 1.0)  # ±10%
+        backoff_until = mono() + max(1.0, delay + jitter)
+        new_entry = entry or _CacheEntry(pass_obj=None, set_ts=0)
+        new_entry.retry_after = backoff_until
+        new_entry.fail_streak = streak
+        _CACHE[sat_id] = new_entry
         return None
 
     set_ts = _extract_set_ts(pass_obj)
     if set_ts is None:
         # Bad pass shape; don't cache long-term
+        # Reset failure streak on "success" but no set time; still return pass.
+        new_entry = entry or _CacheEntry(pass_obj=None, set_ts=0)
+        new_entry.pass_obj = pass_obj
+        new_entry.set_ts = 0
+        new_entry.retry_after = 0.0
+        new_entry.fail_streak = 0
+        _CACHE[sat_id] = new_entry
         return pass_obj
 
-    _CACHE[sat_id] = _CacheEntry(pass_obj=pass_obj, set_ts=set_ts, retry_after=0.0)
+    # Success: cache until set time; clear backoff.
+    _CACHE[sat_id] = _CacheEntry(pass_obj=pass_obj, set_ts=set_ts, retry_after=0.0, fail_streak=0)
     return pass_obj
 
 
@@ -161,6 +174,7 @@ def visible_now(
     start = _RR_IDX % n
     ordered = sat_items[start:] + sat_items[:start]
 
+    # Determine the fetch budget for this tick.
     fetch_budget = max_fetches_per_tick if max_fetches_per_tick is not None else n
 
     for sat_id, color in ordered:
