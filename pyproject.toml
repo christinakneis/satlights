@@ -1,0 +1,14 @@
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.mypy]
+python_version = "3.13"
+# We'll tighten later as we implement modules
+warn_unused_ignores = true
+no_implicit_optional = true
+check_untyped_defs = true
