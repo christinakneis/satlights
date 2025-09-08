@@ -53,7 +53,7 @@ def run_forever(
         t0 = monotonic_fn()  # Get the start time.
 
         pairs = visible_now(
-            cfg, now_fn=now_fn
+            cfg, now_fn=now_fn, mono_fn=monotonic_fn, max_fetches_per_tick=1
         )  # Get the satellite and color pairs from the visible_now function.
         if pairs:
             line = format_line(
@@ -84,7 +84,7 @@ def run_once(
     """
     t0 = monotonic_fn()
 
-    pairs = visible_now(cfg, now_fn=now_fn)
+    pairs = visible_now(cfg, now_fn=now_fn, mono_fn=monotonic_fn, max_fetches_per_tick=1)
     if pairs:
         line = format_line(pairs)
         if line:

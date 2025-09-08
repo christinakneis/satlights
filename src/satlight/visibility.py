@@ -20,6 +20,7 @@ Maps to:
 # This function gets the logger for the visibility decision.
 _LOG = get_logger(__name__)
 
+
 #
 # Simple in-memory cache: one entry per satellite.
 # We cache the latest pass object until its "set" time. If fetch fails,
@@ -27,14 +28,19 @@ _LOG = get_logger(__name__)
 #
 @dataclass
 class _CacheEntry:
-    pass_obj: Dict[str, Any]            # raw pass object
-    set_ts: int                         # cached pass 'set' timestamp
-    retry_after: float = 0.0            # monotonic time; don't refetch before this
+    pass_obj: Dict[str, Any]  # raw pass object
+    set_ts: int  # cached pass 'set' timestamp
+    retry_after: float = 0.0  # monotonic time; don't refetch before this
+
 
 _CACHE: Dict[int, _CacheEntry] = {}
+_RR_IDX: int = 0  # round-robin start index across ticks
+
 
 def clear_cache_for_tests() -> None:  # exported for unit tests
     _CACHE.clear()
+    global _RR_IDX
+    _RR_IDX = 0
 
 
 # This function parses the altitude from the pass object.
@@ -82,6 +88,7 @@ def _is_overhead_now(pass_obj: Dict[str, Any], now_utc: int, min_elev: float) ->
         return False
 
 
+# This function gets the pass object with cache.
 def _get_pass_with_cache(
     sat_id: int,
     cfg: AppConfig,
@@ -132,6 +139,7 @@ def visible_now(
     fetcher: Callable[[int, float, float], Optional[Dict[str, Any]]] = fetch_next_pass,
     now_fn: Callable[[], float] = time.time,
     mono_fn: Callable[[], float] = time.monotonic,
+    max_fetches_per_tick: Optional[int] = None,
 ) -> List[Tuple[int, str]]:
     """
     Return list of (sat_id, color) for satellites considered 'overhead now'
@@ -143,13 +151,42 @@ def visible_now(
     now_utc = int(now_fn())
     results: List[Tuple[int, str]] = []
 
-    for sat_id, color in cfg.satellites.items():
-        pass_obj = _get_pass_with_cache(
-            sat_id, cfg, now_utc, fetcher=fetcher, mono=mono_fn
-        )
+    # Determine round-robin order so we don't hammer the API for all sats at once.
+    sat_items = list(cfg.satellites.items())
+    n = len(sat_items)
+    if n == 0:
+        return results
+
+    global _RR_IDX
+    start = _RR_IDX % n
+    ordered = sat_items[start:] + sat_items[:start]
+
+    fetch_budget = max_fetches_per_tick if max_fetches_per_tick is not None else n
+
+    for sat_id, color in ordered:
+        # Try cache first; only fetch if we still have budget and cache is unusable.
+        entry = _CACHE.get(sat_id)
+        pass_obj: Optional[Dict[str, Any]] = None
+        if entry and now_utc <= entry.set_ts:
+            pass_obj = entry.pass_obj
+        elif mono_fn() < (entry.retry_after if entry else 0.0):
+            pass_obj = None  # in backoff
+        else:
+            if fetch_budget > 0:
+                pass_obj = _get_pass_with_cache(
+                    sat_id, cfg, now_utc, fetcher=fetcher, mono=mono_fn
+                )
+                fetch_budget -= 1
+            else:
+                # No budget left this tick; skip fetching this satellite now.
+                pass_obj = None
+
         if pass_obj is None:
             continue
         if _is_overhead_now(pass_obj, now_utc, cfg.min_elevation_deg):
             results.append((sat_id, color))
+
+    # Advance round-robin pointer for the next tick
+    _RR_IDX = (_RR_IDX + 1) % n
 
     return results

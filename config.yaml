@@ -11,6 +11,8 @@ satellites:
   33591: "green"   # NOAA-19
   37849: "purple"  # Suomi NPP
   43013: "teal"    # NOAA-20 / JPSS-1
+  48915: "red"     # Starlink satellite
+  52823: "orange"  # Globalstar satellite
 
 # Output destinations (C-6: limited to stdout, file, or tcp). This example shows all three options.
 outputs:
