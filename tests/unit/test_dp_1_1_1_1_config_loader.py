@@ -17,7 +17,7 @@ def test_FR_1_1_1_1__loads_valid_yaml_to_dict(tmp_path):
     assert data["lon"] == -122.4
     assert data["satellites"] == {25544: "blue"}
     assert data["outputs"] == ["stdout"]
-    print("✅test_FR_1_1_1_1__loads_valid_yaml_to_dict passed")
+    print("\n.✅test_FR_1_1_1_1__loads_valid_yaml_to_dict passed")
 
 
 # This test checks if the load_yaml function raises a clear error for malformed YAML.

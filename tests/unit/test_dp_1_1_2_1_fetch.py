@@ -51,7 +51,7 @@ def test_FR_1_1_2_1__calls_passes_endpoint_per_id_with_timeout_and_retry():
     assert qs.get("lat") == [str(lat)]
     assert qs.get("lon") == [str(lon)]
     assert qs.get("limit") == ["1"]
-    print("✅test_FR_1_1_2_1__calls_passes_endpoint_per_id_with_timeout_and_retry passed")
+    print("\n.✅test_FR_1_1_2_1__calls_passes_endpoint_per_id_with_timeout_and_retry passed")
 
 
 # This test checks if the fetch_next_pass function returns None and logs an error if the API returns a non-200 status code.
@@ -74,4 +74,4 @@ def test_FR_1_1_2_1__api_error_results_in_not_visible_and_logs_error():
     assert res is None
     # Note: Logging to STDERR per C-5 constraint, so we can't easily test log content
     # The function correctly returns None on API errors, which is the main behavior
-    print("✅test_FR_1_1_2_1__api_error_results_in_not_visible_and_logs_error passed")
+    print("\n.✅test_FR_1_1_2_1__api_error_results_in_not_visible_and_logs_error passed")
