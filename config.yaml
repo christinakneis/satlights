@@ -1,7 +1,19 @@
-lat: 37.8
-lon: -122.4
-min_elevation_deg: 20.0
+# Sample configuration for satlight
+# This file demonstrates the expected YAML structure
+
+# Lab location coordinates (required)
+lat: 37.7749  # San Francisco latitude
+lon: -122.4194  # San Francisco longitude
+
+# Satellite tracking configuration
 satellites:
-  25544: blue
+  25544: "blue"    # International Space Station (ISS)
+  48915: "green"   # Starlink satellite
+  43013: "red"     # Another satellite
+
+# Output destinations (C-6: limited to stdout, file, or tcp). This example shows all three options.
 outputs:
-  - stdout
+  - "stdout"                    # Print to console
+
+# Minimum elevation threshold (optional, defaults to 10.0 degrees)
+min_elevation_deg: 15.0
