@@ -1,7 +1,7 @@
-.PHONY: help run fmt lint test
+.PHONY: help run fmt lint test docker-build docker-run up down down-clean errlogs-realtime errlogs-tail stdout-realtime stdout-logs read-outputfile clean-outputfile
 
 help:
-	@echo "Targets: run, fmt, lint, test"
+	@echo "Targets: run, fmt, lint, test, docker-build, docker-run, up, down, down-clean, errlogs-realtime, errlogs-tail, stdout-realtime, stdout-logs, read-outputfile, clean-outputfile"
 
 # Run the CLI assuming config.yaml is in the current directory (uses CLI default /app/config.yaml for containers)
 run: 
@@ -20,3 +20,107 @@ lint:
 
 test:
 	python3 -m pytest $(ARGS) 		# can type make test ARGS="-s -v" for more verbose output
+
+# ------------------------------------------------------------
+# --- Docker / Compose helpers ---
+# ------------------------------------------------------------
+
+# Name and tag of the image from the docker-compose.yml
+IMAGE ?= satlight:dev # can set IMAGE=satlight:ops for ops version later if needed.
+
+docker-build:
+	docker build -t $(IMAGE) .
+
+# Runs forever by default 
+docker-run: | out 		# out is a helper to create the out directory if it doesn't exist.
+	docker run --rm -it \
+	  -v $(PWD)/config.yaml:/app/config.yaml:ro \
+	  -v $(PWD)/out:/out \
+	  $(IMAGE) \
+	  &  # run in background
+
+# Runs one cycle by default (adds --once).
+docker-run-once: | out
+	docker run --rm -it \
+	  -v $(PWD)/config.yaml:/app/config.yaml:ro \
+	  -v $(PWD)/out:/out \
+	  $(IMAGE) --once
+
+# Starts the container in the background and runs forever.
+up: | out
+	docker compose up --build -d
+
+# Stops the container.
+down:
+	docker compose down
+
+# Stops the container and cleans the output file
+down-clean: down clean-outputfile
+
+# Creates the out directory if it doesn't exist.
+out:
+	mkdir -p out
+	chmod 777 out
+
+
+# --- Docker log and output helpers -----------
+
+# Shows the logs (STDERR error messages) of the current running container. -f follows the logs in realtime 
+errlogs-realtime:
+	docker compose logs -f 
+
+# Shows the last 100 lines of the logs (STDERR error messages) of the current running container.
+errlogs-tail:
+	docker compose logs --tail 100
+
+# Shows the logs (STDOUT output messages) of the current running container.
+stdout-realtime:
+	@echo "Following STDOUT from Docker container in real-time..."
+	@echo "Press Ctrl+C to stop"
+	@CONTAINER_ID=$$(docker compose ps -q); \
+	if [ -n "$$CONTAINER_ID" ]; then \
+		docker logs -f "$$CONTAINER_ID" 2>/dev/null; \
+	else \
+		echo "No running container found. Run 'make up' first."; \
+	fi
+
+# Shows historical STDOUT logs (last 100 lines, no real-time following)
+stdout-logs:
+	@echo "Showing historical STDOUT logs..."
+	@CONTAINER_ID=$$(docker compose ps -q); \
+	if [ -n "$$CONTAINER_ID" ]; then \
+		docker logs --tail 100 "$$CONTAINER_ID" 2>/dev/null; \
+	else \
+		echo "No running container found. Run 'make up' first."; \
+	fi
+
+# Reads the output file from config.yaml.
+read-outputfile:
+	@echo "Reading output file from config.yaml..."
+	@OUTPUT_FILE=$$(grep -E "^\s*-\s*\"file:" config.yaml | sed 's/.*"file://' | sed 's/".*//' | head -1); \
+	if [ -n "$$OUTPUT_FILE" ]; then \
+		echo "Output file: $$OUTPUT_FILE"; \
+		if [ -f "$$OUTPUT_FILE" ]; then \
+			echo "--- File contents ---"; \
+			cat "$$OUTPUT_FILE"; \
+		else \
+			echo "File does not exist yet: $$OUTPUT_FILE"; \
+		fi; \
+	else \
+		echo "No file output found in config.yaml"; \
+	fi
+
+clean-outputfile:
+	@echo "Cleaning output file from config.yaml..."
+	@OUTPUT_FILE=$$(grep -E "^\s*-\s*\"file:" config.yaml | sed 's/.*"file://' | sed 's/".*//' | head -1); \
+	if [ -n "$$OUTPUT_FILE" ]; then \
+		echo "Removing: $$OUTPUT_FILE"; \
+		if [ -f "$$OUTPUT_FILE" ]; then \
+			rm "$$OUTPUT_FILE"; \
+			echo "File removed successfully"; \
+		else \
+			echo "File does not exist: $$OUTPUT_FILE"; \
+		fi; \
+	else \
+		echo "No file output found in config.yaml"; \
+	fi
