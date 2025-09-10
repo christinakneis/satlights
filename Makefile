@@ -98,20 +98,21 @@ stdout-logs:
 	fi
 
 
-# Reads the output file from config.yaml.
+# Reads the output file from config.yaml and displays the contents from within the container.
 read-outputfile:
-	@echo "Reading output file from config.yaml..."
-	@OUTPUT_FILE=$$(grep -E "^\s*-\s*\"file:" config.yaml | sed 's/.*"file://' | sed 's/".*//' | head -1); \
-	if [ -n "$$OUTPUT_FILE" ]; then \
-		echo "Output file: $$OUTPUT_FILE"; \
-		if [ -f "$$OUTPUT_FILE" ]; then \
-			echo "--- File contents ---"; \
-			cat "$$OUTPUT_FILE"; \
+	@echo "Reading output file from within Docker container..."
+	@CONTAINER_ID=$$(docker compose ps -q); \
+	if [ -n "$$CONTAINER_ID" ]; then \
+		OUTPUT_FILE=$$(grep -E "^\s*-\s*\"file:" config.yaml | sed 's/.*"file://' | sed 's/".*//' | head -1); \
+		if [ -n "$$OUTPUT_FILE" ]; then \
+			echo "Output file: $$OUTPUT_FILE"; \
+			echo "--- File contents from container ---"; \
+			docker exec "$$CONTAINER_ID" cat "$$OUTPUT_FILE" 2>/dev/null || echo "File does not exist yet in container: $$OUTPUT_FILE"; \
 		else \
-			echo "File does not exist yet: $$OUTPUT_FILE"; \
+			echo "No file output found in config.yaml"; \
 		fi; \
 	else \
-		echo "No file output found in config.yaml"; \
+		echo "No running container found. Run 'make up' first."; \
 	fi
 
 clean-outputfile:

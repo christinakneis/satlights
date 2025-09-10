@@ -11,12 +11,9 @@ A small CLI service that watches for specific satellites passing above your lab 
 ## 📥 Inputs 
 The only input to SatLight is a YAML configuration file (`config.yaml`) placed in the project root. See the configuration section below for more details 
 
-## 👩‍🎨 Design Method
-This project follows the **IDT** decomposition of Customer Needs (CN) and Constraints (C) mapped to Functional Requirements (FR) > Design Parameters (DP). 
-
 ---
 
-## ⚙️ How it works (quick)
+## ✨ How it works (quick)
 
 1. **Config** (`config.yaml`) defines your lab location, the satellites to track (`NORAD_ID → color`), outputs, and an optional `min_elevation_deg`.
 2. **API**: for each configured satellite, the service queries the public **sat.terrestre.ar** "passes" endpoint to get the **next pass window** (rise/culmination/set).
@@ -35,119 +32,34 @@ Politeness to the free API:
 - Only **one** satellite fetch per tick (round-robin)
 - **Exponential backoff** with jitter after errors (e.g., 429/500)
 
+--- 
+
+## 👩‍🎨 Design Method
+This project follows the **Innovative Design Theory (IDT)** decomposition of Customer Needs (CN) and Constraints (C) mapped to Functional Requirements (FR) > Design Parameters (DP). See the TRACEABILITY.md document for more details.  
+
 ---
 
 ## 🚧 Constraints satisfied
 
-- **C-1** Python ≥ 3.12 → uses **Python 3.13**
-- **C-2** Type annotations → typed code + `mypy`
-- **C-3** Unit tests → `pytest`
-- **C-4** Docker used for containerization → `Dockerfile` + `docker-compose.yml`
-- **C-5** Logging only to **STDERR** → app logs (incl. a 10 s heartbeat) do not use STDOUT
-- **C-6** Outputs limited to STDOUT, file, or TCP → only these sinks are implemented
+See the TRACEABILITY.md document to see the the list of constraints satisfied and how they are verified. 
+
+---
+
+## ⚙️ Functional Requirements and Design Parameters 
+
+See the TRACEABILITY.md document to see the Functional Requirement Decomposition and mapping to Deisgn Parameters. 
 
 ---
 
 ## 🫆 Traceability
 
-See the Traceability.md document to see the Functional Requirement Decomposition and tracability into Deisgn Parameters and testing.  
+See the TRACEABILITY.md document to see how Functional Requirement and Constraint Compliance are traced into testing of design parameters.  
 
 ---
 
 ## ⚖️ Design Choices and Tradeoffs 
 
-
-### 1) Public API & “overhead” definition
-- **Choice:** Use `sat.terrestre.ar` per-satellite **passes** endpoint.  
-  **Why:** Free, no key, simple JSON with `rise/culmination/set`.  
-  **Tradeoff:** No “what’s overhead now?” discovery; you must pre-select NORAD IDs. Occasional 429/500s.  
-  **Alternatives (later):** Use N2YO `/above` for discovery; or compute locally (Skyfield + TLEs) for zero external calls.
-
-- **Choice:** “Overhead now” = `rise.utc_timestamp ≤ now ≤ set.utc_timestamp` **and** `culmination.alt ≥ min_elevation_deg`.  
-  **Why:** Fast, easy to reason about; one call gives the pass window + peak elevation.  
-  **Tradeoff:** Uses **peak** elevation to gate the whole pass, not instantaneous elevation at `now`. Slightly permissive near edges.  
-  **Alternatives (later):** Use an API or local propagation to compute **instantaneous** elevation each tick.
-
-
-### 2) Cadence & timing
-- **Choice:** Drift-free **10 s** cadence using `time.monotonic()`; subtract work time each tick.  
-  **Why:** Predictable loop that satisfies CN-1.3 precisely; immune to wall-clock jumps.  
-  **Tradeoff:** If a tick is slow, the next tick may start immediately (sleep 0).  
-  **Alternatives (later):** Cron/scheduler (less precise); async scheduling or job queues (more complexity).
-
-- **Choice:** Fetch **one satellite per tick** (round-robin) with an **in-memory cache** of pass windows.  
-  **Why:** Polite to the free API; smooths request rate; still converges across ticks.  
-  **Tradeoff:** With many IDs, freshness updates spread across multiple ticks.  
-  **Alternatives (later):** Raise per-tick budget; batch endpoints (if available); or local predictions.
-
-
-### 3) Rate limits & resilience
-- **Choice:** **Timeout (~5 s), one retry, exponential backoff** with jitter; treat failures as “not visible this tick.”  
-  **Why:** Loop stays healthy; one bad call doesn’t block others (DP-1.2.2).  
-  **Tradeoff:** During API issues you may miss a legitimate pass.  
-  **Alternatives (later):** Multi-provider fallback; longer/persistent cache; circuit breaker.
-
-
-### 4) Configuration & validation
-- **Choice:** **YAML** config + **Pydantic** validation.  
-  **Why:** Human-friendly file; strong schema errors early; normalized object for the app.  
-  **Tradeoff:** Extra dependency; must keep schema/docs in sync.  
-  **Alternatives (later):** JSON/TOML; env-only; hot-reload.
-
-- **Choice:** `min_elevation_deg` default **10.0°** with `0 ≤ min ≤ 90`.  
-  **Why:** Sensible horizon threshold; safe bounds.  
-  **Tradeoff:** Labs may prefer a different default (overridable in config).
-
-
-### 5) Output & logging (constraints-driven)
-- **Choice:** Outputs limited to **STDOUT**, **file**, or **TCP**; validation rejects others (**C-6**).  
-  **Why:** Exactly matches constraint and keeps interface simple.  
-  **Tradeoff:** No MQTT/HTTP/webhooks.  
-  **Alternatives (later, only if constraints change):** Pluggable sink system.
-
-- **Choice:** **Logs only to STDERR** (**C-5**); STDOUT reserved **only** for the command line when sats are overhead.  
-  **Why:** Clean separation of data vs diagnostics; predictable piping.  
-  **Tradeoff:** No structured JSON logs to STDOUT.  
-  **Alternatives (later):** Structured logs to STDERR; optional exporters (if constraints allow).
-
-- **Choice:** **One line at most per tick**; stable format `"id: color, id: color"` sorted by ID.  
-  **Why:** Deterministic, easy to parse and diff; downstream-friendly.  
-  **Tradeoff:** No custom formatting per sink.  
-  **Alternatives (later):** Configurable formatter (if needs emerge).
-
-
-### 6) Simplicity of runtime model
-- **Choice:** **Synchronous** Python; no threads/async.  
-  **Why:** Minimal complexity; straightforward tests; reliable timing.  
-  **Tradeoff:** Not maximally parallel; per-tick IO budget is limited.  
-  **Alternatives (later):** `async` + `httpx`, threadpool for IO, or worker processes.
-
-
-### 7) Packaging & operations
-- **Choice:** **Docker** (`python:3.13-slim`), non-root user, `docker-compose` mounts `/app/config.yaml`.  
-  **Why:** Reproducible, portable, one-command runs (CN-2/C-4).  
-  **Tradeoff:** Image size/overhead vs pure host install.  
-  **Alternatives (later):** Multi-stage builds to slim further; publish to a registry.
-
-- **Choice:** **Makefile** targets for run/lint/test/docker/compose.  
-  **Why:** Short, memorable commands; avoids long flags.  
-  **Tradeoff:** Another layer of tooling (standard on dev machines).
-
-
-### 8) Testing & quality
-- **Choice:** **pytest** with HTTP mocking + time monkeypatch; **mypy**; **ruff**.  
-  **Why:** Fast feedback; enforces C-2/C-3; keeps code consistent.  
-  **Tradeoff:** Some boilerplate in tests and configs.  
-  **Alternatives (later):** Coverage gates; property-based tests; mutation testing.
-
-
-### 9) Scope boundaries (intentional “non-features”)
-- **Not included (on purpose):** Instantaneous elevation, sunlit/visibility optics, TLE lifecycle, discovery of nearby IDs, fancy sinks, metrics/telemetry, persistent cache.  
-  **Why:** Keep MVP minimal, testable, and constraint-true; ship a robust core first.  
-  **Future options:** Each is a clear extension seam without rewriting the core.
-
-
-
+See the TRACEABILITY.md document to see how Design Choices were made and Tradeoffs were assessed. 
 
 ---
 
@@ -169,7 +81,7 @@ outputs:
   # - tcp:127.0.0.1:9000       # optional TCP sink
 ```
 
-### 🗂️ Config schema
+### Config schema
 
 - `lat`, `lon`: Your lab's coordinates (required)
 - `satellites`: Map of `NORAD_ID → color` (required, non-empty)
@@ -331,8 +243,16 @@ Key test areas:
 - Emitter timing (10s cadence, drift compensation)
 - Output sinks (STDOUT, file append, TCP)
 
+See the TRACEABILITY.md document for more details on which unit tests were used to verify each functionality. 
+
 ---
 
 ## 🪪 License
 
 This project is part of a technical challenge/assessment.
+
+---
+
+## 🎭 If this project were a meme:
+
+![SpongeBob Satellite Colors Meme](spongebob_satellite_colors_meme.png)

@@ -1,7 +1,38 @@
 # Design Traceability 
 
+## 👩‍🎨 Design Method
+This project follows **Innovative Design Theory (IDT)** and **Axiomatic Design** metholdologies to systematically engineer a novel approach the given design challenge. 
 
-## FR/DP Decomposition
+**Key Components:**
+- **Customer Needs (CN)**: High-level problems and requirements from the user's perspective
+- **Constraints (C)**: Technical, business, or environmental limitations that must be respected
+- **Functional Requirements (FR)**: Specific capabilities the system must provide to satisfy customer needs
+- **Design Parameters (DP)**: Concrete implementation decisions that realize the functional requirements
+- **System Archiecture**: A map of how the DPs work together 
+
+**Process:**
+1. **Empathize & Define**: Understand customer needs and articulate clear problems and constraints 
+2. **Decompose & Design**: Break down customer needs into specific functional requirements; systematically map them to physical DPs at each level to ensure functional fulfillment and physical feasibility.
+3. **Architect**: Map how design parameters interact, and design how components and interactions will be tested. 
+4. **Build & Test**: Implement the design parameters and verify they satisfy functional requirements through comprehensive testing that links back to the functional requirements. 
+5. **Iterate**: Refine design parameters based on test results and feedback, ensuring continuous improvement and maintaining traceability from customer needs through implementation. 
+
+This methodology ensures every design decision can be traced back to a specific customer need while respecting all constraints, enabling rigorous verification and systematic innovation.
+
+---
+
+## 🚧 Constraints 
+
+- **C-1** Python ≥ 3.12 → uses **Python 3.13**
+- **C-2** Type annotations → typed code + `mypy`
+- **C-3** Unit tests → `pytest`
+- **C-4** Docker used for containerization → `Dockerfile` + `docker-compose.yml`
+- **C-5** Logging only to **STDERR** → app logs (incl. a 10 s heartbeat) do not use STDOUT
+- **C-6** Outputs limited to STDOUT, file, or TCP → only these sinks are implemented
+
+---
+
+## ⚙️ FR/DP Decomposition
 
 ### FR-1: To control the lab lighting behavior based on real-time satellite passes. *(CN-1, C-6)*
 - **FR-1.1** To decide which configured satellites are “overhead” according to the referenced API and the lab's location *(CN-1.1, CN-1.2)*
@@ -72,7 +103,103 @@
 ---
 
 
-## Testing Traceability 
+## ⚖️ Design Choices and Tradeoffs 
+
+
+### 1) Public API & “overhead” definition
+- **Choice:** Use `sat.terrestre.ar` per-satellite **passes** endpoint.  
+  **Why:** Free, no key, simple JSON with `rise/culmination/set`.  
+  **Tradeoff:** No “what’s overhead now?” discovery; you must pre-select NORAD IDs. Occasional 429/500s.  
+  **Alternatives (later):** Use N2YO `/above` for discovery; or compute locally (Skyfield + TLEs) for zero external calls.
+
+- **Choice:** “Overhead now” = `rise.utc_timestamp ≤ now ≤ set.utc_timestamp` **and** `culmination.alt ≥ min_elevation_deg`.  
+  **Why:** Fast, easy to reason about; one call gives the pass window + peak elevation.  
+  **Tradeoff:** Uses **peak** elevation to gate the whole pass, not instantaneous elevation at `now`. Slightly permissive near edges.  
+  **Alternatives (later):** Use an API or local propagation to compute **instantaneous** elevation each tick.
+
+
+### 2) Cadence & timing
+- **Choice:** Drift-free **10 s** cadence using `time.monotonic()`; subtract work time each tick.  
+  **Why:** Predictable loop that satisfies CN-1.3 precisely; immune to wall-clock jumps.  
+  **Tradeoff:** If a tick is slow, the next tick may start immediately (sleep 0).  
+  **Alternatives (later):** Cron/scheduler (less precise); async scheduling or job queues (more complexity).
+
+- **Choice:** Fetch **one satellite per tick** (round-robin) with an **in-memory cache** of pass windows.  
+  **Why:** Polite to the free API; smooths request rate; still converges across ticks.  
+  **Tradeoff:** With many IDs, freshness updates spread across multiple ticks.  
+  **Alternatives (later):** Raise per-tick budget; batch endpoints (if available); or local predictions.
+
+
+### 3) Rate limits & resilience
+- **Choice:** **Timeout (~5 s), one retry, exponential backoff** with jitter; treat failures as “not visible this tick.”  
+  **Why:** Loop stays healthy; one bad call doesn’t block others (DP-1.2.2).  
+  **Tradeoff:** During API issues you may miss a legitimate pass.  
+  **Alternatives (later):** Multi-provider fallback; longer/persistent cache; circuit breaker.
+
+
+### 4) Configuration & validation
+- **Choice:** **YAML** config + **Pydantic** validation.  
+  **Why:** Human-friendly file; strong schema errors early; normalized object for the app.  
+  **Tradeoff:** Extra dependency; must keep schema/docs in sync.  
+  **Alternatives (later):** JSON/TOML; env-only; hot-reload.
+
+- **Choice:** `min_elevation_deg` default **10.0°** with `0 ≤ min ≤ 90`.  
+  **Why:** Sensible horizon threshold; safe bounds.  
+  **Tradeoff:** Labs may prefer a different default (overridable in config).
+
+
+### 5) Output & logging (constraints-driven)
+- **Choice:** Outputs limited to **STDOUT**, **file**, or **TCP**; validation rejects others (**C-6**).  
+  **Why:** Exactly matches constraint and keeps interface simple.  
+  **Tradeoff:** No MQTT/HTTP/webhooks.  
+  **Alternatives (later, only if constraints change):** Pluggable sink system.
+
+- **Choice:** **Logs only to STDERR** (**C-5**); STDOUT reserved **only** for the command line when sats are overhead.  
+  **Why:** Clean separation of data vs diagnostics; predictable piping.  
+  **Tradeoff:** No structured JSON logs to STDOUT.  
+  **Alternatives (later):** Structured logs to STDERR; optional exporters (if constraints allow).
+
+- **Choice:** **One line at most per tick**; stable format `"id: color, id: color"` sorted by ID.  
+  **Why:** Deterministic, easy to parse and diff; downstream-friendly.  
+  **Tradeoff:** No custom formatting per sink.  
+  **Alternatives (later):** Configurable formatter (if needs emerge).
+
+
+### 6) Simplicity of runtime model
+- **Choice:** **Synchronous** Python; no threads/async.  
+  **Why:** Minimal complexity; straightforward tests; reliable timing.  
+  **Tradeoff:** Not maximally parallel; per-tick IO budget is limited.  
+  **Alternatives (later):** `async` + `httpx`, threadpool for IO, or worker processes.
+
+
+### 7) Packaging & operations
+- **Choice:** **Docker** (`python:3.13-slim`), non-root user, `docker-compose` mounts `/app/config.yaml`.  
+  **Why:** Reproducible, portable, one-command runs (CN-2/C-4).  
+  **Tradeoff:** Image size/overhead vs pure host install.  
+  **Alternatives (later):** Multi-stage builds to slim further; publish to a registry.
+
+- **Choice:** **Makefile** targets for run/lint/test/docker/compose.  
+  **Why:** Short, memorable commands; avoids long flags.  
+  **Tradeoff:** Another layer of tooling (standard on dev machines).
+
+
+### 8) Testing & quality
+- **Choice:** **pytest** with HTTP mocking + time monkeypatch; **mypy**; **ruff**.  
+  **Why:** Fast feedback; enforces C-2/C-3; keeps code consistent.  
+  **Tradeoff:** Some boilerplate in tests and configs.  
+  **Alternatives (later):** Coverage gates; property-based tests; mutation testing.
+
+
+### 9) Scope boundaries (intentional “non-features”)
+- **Not included (on purpose):** Instantaneous elevation, sunlit/visibility optics, TLE lifecycle, discovery of nearby IDs, fancy sinks, metrics/telemetry, persistent cache.  
+  **Why:** Keep MVP minimal, testable, and constraint-true; ship a robust core first.  
+  **Future options:** Each is a clear extension seam without rewriting the core.
+
+
+--- 
+
+
+## 🫆 Testing Traceability 
 
 ### A) FR 1 (service application) Decomposition Verification
 
@@ -90,9 +217,7 @@
 | **FR-1.2** Emit one line per 10 s when any are overhead | Unit tests | `test_FR_1_2__one_line_per_tick_when_overhead_else_silent` (C-6) |
 | **FR-1.2.1** Build `"NORAD_ID: color, ..."` | Unit tests | `test_FR_1_2_1__sorts_by_id_and_formats_single_line`, `test_FR_1_2_1__empty_input_returns_empty_string` |
 | **FR-1.2.2** 10 s cadence & fan-out to sinks | Unit tests | `test_FR_1_2_2__cadence_subtracts_elapsed_time_for_10s_period`, `test_FR_1_2_2__fanout_writes_to_all_configured_sinks_once` (C-6), `test_FR_1_2_2__sink_failure_isolated_and_error_logged` (C-6, C-5) |
-| **DP-1** CLI service | Manual/CLI check | `python -m satlight.cli --config ./config.yaml --once` produces either one line or nothing w/o errors |
-| **DP-1.1** Visibility module | Covered by FR-1.1/1.1.2 tests | See tests above under FR-1.1 and FR-1.1.2 |
-| **DP-1.2** Timed emitter + sinks | Covered by FR-1.2 tests | See tests above under FR-1.2 |
+
 
 > All FR-1 sub-items are backed by executable pytest cases with mocked HTTP and time control.
 
@@ -135,7 +260,7 @@
 
 ---
 
-## E) How to show evidence quickly
+#### How to show evidence quickly
 
 - **Run unit tests (FR-1, FR-3.2):** `make test -s -v`
 - **Typing & lint (FR-3.3/3.4):** `make fmt && make lint`
