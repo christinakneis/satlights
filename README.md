@@ -250,3 +250,9 @@ See the TRACEABILITY.md document for more details on which unit tests were used 
 ## 🪪 License
 
 This project is part of a technical challenge/assessment.
+
+---
+
+## 🎭 If this project were a meme:
+
+![SpongeBob Satellite Colors Meme](spongebob_satellite_colors_meme.png)
