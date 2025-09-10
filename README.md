@@ -12,7 +12,7 @@ A small CLI service that watches for specific satellites passing above your lab 
 The only input to SatLight is a YAML configuration file (`config.yaml`) placed in the project root. See the configuration section below for more details 
 
 ## 👩‍🎨 Design Method
-This project follows the **IDT** decomposition of Customer Needs (CN) and Constraints (C) mapped to Functional Requirements (FR) > Design Parameters (DP). 
+This project follows the **Innovative Design Theory (IDT)** decomposition of Customer Needs (CN) and Constraints (C) mapped to Functional Requirements (FR) > Design Parameters (DP). 
 
 ---
 

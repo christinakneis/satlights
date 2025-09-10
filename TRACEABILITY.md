@@ -90,9 +90,7 @@
 | **FR-1.2** Emit one line per 10 s when any are overhead | Unit tests | `test_FR_1_2__one_line_per_tick_when_overhead_else_silent` (C-6) |
 | **FR-1.2.1** Build `"NORAD_ID: color, ..."` | Unit tests | `test_FR_1_2_1__sorts_by_id_and_formats_single_line`, `test_FR_1_2_1__empty_input_returns_empty_string` |
 | **FR-1.2.2** 10 s cadence & fan-out to sinks | Unit tests | `test_FR_1_2_2__cadence_subtracts_elapsed_time_for_10s_period`, `test_FR_1_2_2__fanout_writes_to_all_configured_sinks_once` (C-6), `test_FR_1_2_2__sink_failure_isolated_and_error_logged` (C-6, C-5) |
-| **DP-1** CLI service | Manual/CLI check | `python -m satlight.cli --config ./config.yaml --once` produces either one line or nothing w/o errors |
-| **DP-1.1** Visibility module | Covered by FR-1.1/1.1.2 tests | See tests above under FR-1.1 and FR-1.1.2 |
-| **DP-1.2** Timed emitter + sinks | Covered by FR-1.2 tests | See tests above under FR-1.2 |
+
 
 > All FR-1 sub-items are backed by executable pytest cases with mocked HTTP and time control.
 

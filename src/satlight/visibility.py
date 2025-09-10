@@ -11,7 +11,7 @@ from .log import get_logger
 
 """
 Visibility decision
-- DP-1.1.2.2: Filter by time window (rise..set) AND min_elevation_deg using culmination.alt
+- DP-1.1.2.2: Filter by time window (rise..set) AND min_elevation_deg using linear interpolation
 - DP-1.1.2.3: Collect (id, color) pairs from configured satellites
 
 Maps to:
@@ -65,29 +65,104 @@ def _extract_set_ts(pass_obj: Dict[str, Any]) -> Optional[int]:
         return None
 
 
-# This function checks if the satellite is overhead now by checking if the rise time is less than or equal to the current time and the set time is greater than or equal to the current time and the culmination altitude is greater than or equal to the minimum elevation.
-def _is_overhead_now(pass_obj: Dict[str, Any], now_utc: int, min_elev: float) -> bool:
+# This function converts a value to an integer.
+def _safe_int(v: Any) -> Optional[int]:
+    try:
+        return int(v)
+    except Exception:
+        return None
+
+
+# This function clamps (limits) a value between a minimum and maximum. This is used to ensure that the value is within the range of min_elevation_deg to 90 degrees.
+def _clamp(x: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, x))
+
+
+# This function calculates the time when a line crosses a certain altitude using linear interpolation.
+def _cross_time(t1: int, a1: float, t2: int, a2: float, m: float) -> Optional[int]:
     """
-    Inclusive time window and minimum-peak-elevation rule:
-      rise.utc_timestamp <= now <= set.utc_timestamp  AND  culmination.alt >= min_elev
+    Return the timestamp (int) when a line between (t1,a1) -> (t2,a2) crosses altitude m.
+    If the segment is flat:
+      - if a1 >= m: crossing occurs at t1 (we're already above m)
+      - else: no crossing on this segment
+    If the crossing fraction is outside [0,1], return None (no crossing on this segment).
+    """
+    if a1 == a2:
+        return t1 if a1 >= m else None
+    f = (m - a1) / (a2 - a1)
+    if f < 0.0 or f > 1.0:
+        return None
+    # Use nearest-int; timestamps are seconds and our 10 s cadence makes ±1 s irrelevant.
+    return int(round(t1 + f * (t2 - t1)))
+
+
+# This function calculates the time window during which the altitude is greater than or equal to the minimum elevation using linear interpolation.
+def _compute_threshold_window(
+    pass_obj: Dict[str, Any], min_elev: float
+) -> Optional[Tuple[int, int]]:
+    """
+    Compute the inclusive window [t_enter, t_exit] during which altitude >= min_elev,
+    using linear interpolation between rise->culmination and culmination->set.
+    Returns None if the pass never reaches min_elev.
     """
     try:
         rise = pass_obj["rise"]
-        setp = pass_obj["set"]
         culm = pass_obj["culmination"]
+        setp = pass_obj["set"]
 
-        rise_ts = int(rise["utc_timestamp"])
-        set_ts = int(setp["utc_timestamp"])
+        tr = _safe_int(rise.get("utc_timestamp"))
+        tc = _safe_int(culm.get("utc_timestamp"))
+        ts = _safe_int(setp.get("utc_timestamp"))
+        if tr is None or tc is None or ts is None:
+            return None
 
-        alt = _parse_alt(culm.get("alt"))
-        if alt is None:
-            _LOG.error("culmination.alt missing or invalid: %r", culm.get("alt"))
-            return False
+        ar = _parse_alt(rise.get("alt"))
+        ac = _parse_alt(culm.get("alt"))
+        aS = _parse_alt(setp.get("alt"))
+        if ar is None or ac is None or aS is None:
+            return None
 
-        return (rise_ts <= now_utc <= set_ts) and (alt >= min_elev)
+        # If the peak never reaches min_elev, the pass never qualifies.
+        if ac < min_elev:
+            return None
+
+        # Ascending (rise -> culmination): when do we first cross up through min_elev?
+        if ar >= min_elev:
+            t_enter = tr  # already above threshold at rise
+        else:
+            t_enter_result = _cross_time(tr, ar, tc, ac, min_elev)
+            if t_enter_result is None:
+                return None  # couldn't cross up (shouldn't happen if ac >= min_elev)
+            t_enter = t_enter_result
+
+        # Descending (culmination -> set): when do we fall back below min_elev?
+        if aS >= min_elev:
+            t_exit = ts  # stay above threshold until set
+        else:
+            t_exit_result = _cross_time(tc, ac, ts, aS, min_elev)
+            if t_exit_result is None:
+                t_exit = ts  # conservative: treat remainder until set as above
+            else:
+                t_exit = t_exit_result
+
+        return (t_enter, t_exit)
     except Exception:
-        _LOG.error("malformed pass object: %r", pass_obj)
+        return None
+
+
+# This function checks if the satellite is overhead now by checking if the time window is within the current time.
+def _is_overhead_now(pass_obj: Dict[str, Any], now_utc: int, min_elev: float) -> bool:
+    """
+    Interpolation rule (DP-1.1.2.2, refined):
+      Compute [t_enter, t_exit] where the pass is at/above min_elev via linear interpolation
+      between (rise->culmination) and (culmination->set). Consider 'overhead now' iff
+      t_enter <= now_utc <= t_exit (inclusive).
+    """
+    window = _compute_threshold_window(pass_obj, min_elev)
+    if window is None:
         return False
+    t_enter, t_exit = window
+    return t_enter <= now_utc <= t_exit
 
 
 # This function gets the pass object with cache.
@@ -187,9 +262,7 @@ def visible_now(
             pass_obj = None  # in backoff
         else:
             if fetch_budget > 0:
-                pass_obj = _get_pass_with_cache(
-                    sat_id, cfg, now_utc, fetcher=fetcher, mono=mono_fn
-                )
+                pass_obj = _get_pass_with_cache(sat_id, cfg, now_utc, fetcher=fetcher, mono=mono_fn)
                 fetch_budget -= 1
             else:
                 # No budget left this tick; skip fetching this satellite now.
